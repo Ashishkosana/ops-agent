@@ -1,0 +1,9 @@
+{
+  "id": "broken_import",
+  "prompt": "app.main() should return 'hello ops' but the import is wrong. Search helpers, patch the import, re-run tests.",
+  "success_criteria": [
+    "workspace tests pass",
+    "main() == 'hello ops'"
+  ],
+  "notes": "Import/name mismatch — search should find hello() in helpers.py."
+}

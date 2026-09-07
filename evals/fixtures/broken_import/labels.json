@@ -1,0 +1,6 @@
+{
+  "task_id": "broken_import",
+  "expected_files_changed": ["app.py"],
+  "tests_should_pass": true,
+  "gold_hint": "Import hello from helpers, not greet."
+}

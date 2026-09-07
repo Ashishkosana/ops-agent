@@ -1,0 +1,6 @@
+{
+  "task_id": "fix_off_by_one",
+  "expected_files_changed": ["ranges.py"],
+  "tests_should_pass": true,
+  "gold_hint": "range(n) drops n; use range(n + 1)."
+}

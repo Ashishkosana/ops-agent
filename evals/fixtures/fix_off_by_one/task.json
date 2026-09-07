@@ -1,0 +1,9 @@
+{
+  "id": "fix_off_by_one",
+  "prompt": "inclusive_upto(n) should return 0..n inclusive. The tests fail — find the off-by-one and patch it.",
+  "success_criteria": [
+    "workspace tests pass",
+    "inclusive_upto(3) == [0, 1, 2, 3]"
+  ],
+  "notes": "Classic coding-agent repair. Search first, then patch, then re-run tests."
+}

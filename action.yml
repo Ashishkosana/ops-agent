@@ -1,0 +1,44 @@
+name: "ops-agent"
+description: "Run ops-agent on a labeled task fixture (scaffold). Agent loop is YOU IMPLEMENT."
+branding:
+  icon: "terminal"
+  color: "blue"
+
+# LATER STUB: GitHub Action marketplace packaging (release tags, README badges,
+# documented inputs for live LLM keys). Do not publish this as a finished Action.
+
+inputs:
+  fixture:
+    description: "Fixture id under evals/fixtures/ (e.g. fix_off_by_one)."
+    required: false
+    default: "fix_off_by_one"
+  skip-agent:
+    description: "Skip the unimplemented agent loop so CI stays green (default true)."
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - name: Install ops-agent from this checkout
+      shell: bash
+      run: pip install "$GITHUB_ACTION_PATH"
+    - name: Run CLI on fixture
+      shell: bash
+      env:
+        FIXTURE: ${{ inputs.fixture }}
+        SKIP_AGENT: ${{ inputs.skip-agent }}
+      run: |
+        set -euo pipefail
+        # The planner/agent are YOU IMPLEMENT. Default path exits 0 with a
+        # pending scorecard. Pass skip-agent=false to invoke the stub loop
+        # (still exits 0 unless you add --strict after implementation).
+        extra=()
+        if [ "$SKIP_AGENT" = "false" ]; then
+          extra+=(--agent)
+        fi
+        ops-agent run "$FIXTURE" "${extra[@]}"
+        ops-agent eval
