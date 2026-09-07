@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ops-agent"
+version = "0.1.0"
+description = "Multi-tool coding/ops agent with a hard eval harness (planner → tools → verifier → scorecard)."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+authors = [{ name = "Ashish Kosana", email = "ashishkosana@gmail.com" }]
+keywords = ["agent", "eval", "cli", "github-action", "code-repair", "ops"]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11"]
+
+[project.scripts]
+ops-agent = "ops_agent.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Ashishkosana/ops-agent"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ops_agent"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF", "PL"]
+ignore = ["PLR0913"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["PLR2004", "S101"]
+"evals/fixtures/**" = ["INP001"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src/ops_agent"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

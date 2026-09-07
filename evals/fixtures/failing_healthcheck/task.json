@@ -1,0 +1,9 @@
+{
+  "id": "failing_healthcheck",
+  "prompt": "The health probe is failing in CI. The service exposes /health; the script still calls /status. Fix the probe.",
+  "success_criteria": [
+    "workspace tests pass",
+    "url('http://svc') ends with /health"
+  ],
+  "notes": "Ops-flavored fixture: a wrong endpoint, not a language bug."
+}
