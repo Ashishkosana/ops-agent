@@ -1,4 +1,4 @@
-"""CLI: load a task fixture, call the stub planner, print a pending scorecard."""
+"""CLI: load a task fixture, plan, optionally run the agent, print a scorecard."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from ops_agent import __version__
 from ops_agent.agent import run as run_agent
 from ops_agent.eval.fixtures import Fixture, load_fixture, load_fixtures
 from ops_agent.eval.scorecard import build_scorecard, format_scorecard, score_result
-from ops_agent.markers import YOU_IMPLEMENT_AGENT, YOU_IMPLEMENT_PLANNER
 from ops_agent.models import AgentResult, Plan
 from ops_agent.planner import plan as plan_task
 
@@ -19,17 +18,34 @@ from ops_agent.planner import plan as plan_task
 def _call_planner(fixture: Fixture) -> Plan | None:
     try:
         return plan_task(fixture.task)
-    except NotImplementedError as exc:
-        print(f"planner: NotImplemented — {exc}")
+    except (NotImplementedError, RuntimeError) as exc:
+        print(f"planner: error — {exc}")
         return None
 
 
 def _call_agent(fixture: Fixture) -> AgentResult | None:
     try:
         return run_agent(fixture.task)
-    except NotImplementedError as exc:
-        print(f"agent: NotImplemented — {exc}")
+    except (NotImplementedError, RuntimeError) as exc:
+        print(f"agent: error — {exc}")
         return None
+
+
+def _print_agent_summary(result: AgentResult) -> None:
+    verdict = result.verification
+    verdict_txt = "n/a"
+    if verdict is not None:
+        verdict_txt = "accept" if verdict.passed else "reject"
+    print(
+        f"agent: implemented={result.implemented}  "
+        f"tests={result.tests_passed}  "
+        f"files={', '.join(result.files_changed) or '(none)'}  "
+        f"latency_ms={result.latency_ms}  "
+        f"cost_usd={result.cost_usd}  "
+        f"verifier={verdict_txt}"
+    )
+    if result.notes:
+        print(f"agent notes: {result.notes}")
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -49,28 +65,63 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(f"plan steps ({len(plan.steps)}):")
         for step in plan.steps:
             print(f"  - {step}")
+        if plan.notes:
+            print(f"plan notes: {plan.notes}")
 
+    run_loop = bool(args.agent or args.strict)
     result: AgentResult | None = None
-    if args.agent:
+    if run_loop:
         result = _call_agent(fixture)
+        if result is not None:
+            print()
+            _print_agent_summary(result)
     else:
-        print(f"agent: skipped (pass --agent to invoke the stub). {YOU_IMPLEMENT_AGENT}")
+        print("agent: skipped (pass --agent to run the loop, or --strict to require a pass)")
 
-    if args.strict and (plan is None or (args.agent and result is None)):
-        print("strict: unimplemented planner/agent — exiting 2")
-        return 2
+    if args.strict:
+        failed = (
+            plan is None
+            or result is None
+            or not result.implemented
+            or result.verification is None
+            or result.verification.passed is not True
+        )
+        if failed:
+            print("strict: planner/agent/verifier did not accept this fixture — exiting 2")
+            return 2
 
     row = score_result(fixture, result)
+    results = {task.id: result} if result is not None else None
     print()
-    print(format_scorecard(build_scorecard((fixture,), {task.id: result} if result else None)))
-    print(f"\nrow status: {row.status.value}  pass={row.pass_rate}  "
-          f"cost={row.cost_usd}  latency={row.latency_ms}")
+    print(format_scorecard(build_scorecard((fixture,), results)))
+    print(
+        f"\nrow status: {row.status.value}  pass={row.pass_rate}  "
+        f"cost={row.cost_usd}  latency={row.latency_ms}"
+    )
     return 0
 
 
-def cmd_eval(args: argparse.Namespace) -> int:
+def _run_all_fixtures() -> tuple[tuple[Fixture, ...], dict[str, AgentResult]]:
     fixtures = load_fixtures()
-    scorecard = build_scorecard(fixtures)
+    results: dict[str, AgentResult] = {}
+    for fix in fixtures:
+        print(f"running {fix.task.id} ...", file=sys.stderr)
+        outcome = run_agent(fix.task)
+        results[fix.task.id] = outcome
+        status = "pass" if outcome.verification and outcome.verification.passed else "fail"
+        print(
+            f"  -> {status}  tests={outcome.tests_passed}  "
+            f"files={', '.join(outcome.files_changed) or '(none)'}  "
+            f"latency_ms={outcome.latency_ms}  cost_usd={outcome.cost_usd}",
+            file=sys.stderr,
+        )
+    print("", file=sys.stderr)
+    return fixtures, results
+
+
+def cmd_eval(args: argparse.Namespace) -> int:
+    fixtures, results = _run_all_fixtures()
+    scorecard = build_scorecard(fixtures, results)
     if args.format == "json":
         payload = {
             "rows": [
@@ -100,28 +151,28 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ops-agent",
         description=(
-            "Load a labeled coding/ops fixture and run the (stub) planner. "
-            f"Core loop is not implemented yet: {YOU_IMPLEMENT_PLANNER}"
+            "Load a labeled coding/ops fixture, plan a repair, and optionally "
+            "run the deterministic planner → tools → verifier loop."
         ),
     )
     parser.add_argument("--version", action="version", version=f"ops-agent {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    run_p = sub.add_parser("run", help="load one fixture and call the stub planner")
+    run_p = sub.add_parser("run", help="load one fixture and print a plan")
     run_p.add_argument("fixture", help="fixture id (e.g. fix_off_by_one) or path")
     run_p.add_argument(
         "--agent",
         action="store_true",
-        help="also invoke the stub agent loop (expected NotImplemented)",
+        help="run the planner → tools → verifier loop on a temp copy",
     )
     run_p.add_argument(
         "--strict",
         action="store_true",
-        help="exit 2 if planner/agent are still unimplemented (off for scaffold CI)",
+        help="run the agent and exit 2 if the verifier rejects the run",
     )
     run_p.set_defaults(func=cmd_run)
 
-    eval_p = sub.add_parser("eval", help="print the local-fixture scorecard")
+    eval_p = sub.add_parser("eval", help="run every local fixture and print the scorecard")
     eval_p.add_argument(
         "--format",
         choices=("terminal", "json"),

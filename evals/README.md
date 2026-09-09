@@ -1,8 +1,8 @@
 # Eval harness
 
-Labeled **local** fixtures only. The scorecard prints `—` for pass rate, cost,
-and latency until the agent loop is implemented. Do not paste production
-numbers here.
+Labeled **local** fixtures only. `ops-agent eval` runs the agent on each
+workspace (temp copy) and prints pass / cost / latency from that run. Do
+not paste production numbers here.
 
 Each fixture is a directory:
 
@@ -13,9 +13,9 @@ evals/fixtures/<id>/
   workspace/      # tiny broken repo the agent is allowed to search/test/patch
 ```
 
-`labels.json` is for the harness, not for the tools. The agent should not
-need the gold hint to act — that hint exists so a future verifier policy
-can be scored honestly.
+`labels.json` is for the harness, not for the tools. The agent does not
+read `gold_hint`. The hint exists so a verifier policy can be scored
+honestly in eval mode (expected files, tests should pass).
 
 | id | What is broken |
 |---|---|
@@ -27,6 +27,6 @@ Run:
 
 ```bash
 ops-agent eval
-ops-agent run fix_off_by_one
+ops-agent run fix_off_by_one --agent
 python -m ops_agent.eval
 ```

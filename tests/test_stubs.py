@@ -1,48 +1,35 @@
-"""Stubs must fail closed with YOU IMPLEMENT — never silently succeed."""
+"""Ownership markers stay visible; metering is measured, not invented."""
 
 from __future__ import annotations
 
-import pytest
-
-from ops_agent.agent import run as run_agent
-from ops_agent.eval.fixtures import load_fixture
 from ops_agent.markers import (
-    LATER_STUB_METERING,
+    LATER_STUB_MARKETPLACE,
     YOU_IMPLEMENT_AGENT,
     YOU_IMPLEMENT_PLANNER,
     YOU_IMPLEMENT_VERIFIER,
 )
-from ops_agent.models import AgentResult
-from ops_agent.planner import plan
-from ops_agent.tools.metering import record_usage
-from ops_agent.verifier import verify
+from ops_agent.tools.metering import record_usage, reset, summary
 
 
-@pytest.fixture
-def fixture():
-    return load_fixture("fix_off_by_one")
+def test_ownership_markers_still_name_the_core() -> None:
+    assert "planner" in YOU_IMPLEMENT_PLANNER.lower()
+    assert "agent loop" in YOU_IMPLEMENT_AGENT.lower()
+    assert "verifier" in YOU_IMPLEMENT_VERIFIER.lower()
+    assert "marketplace" in LATER_STUB_MARKETPLACE.lower()
 
 
-def test_planner_is_you_implement(fixture) -> None:
-    with pytest.raises(NotImplementedError, match="YOU IMPLEMENT") as exc:
-        plan(fixture.task)
-    assert YOU_IMPLEMENT_PLANNER in str(exc.value)
+def test_metering_pending_until_recorded() -> None:
+    reset()
+    pending = summary()
+    assert pending["cost_usd"] == "—"
+    assert pending["latency_ms"] == "—"
 
 
-def test_agent_is_you_implement(fixture) -> None:
-    with pytest.raises(NotImplementedError, match="YOU IMPLEMENT") as exc:
-        run_agent(fixture.task)
-    assert YOU_IMPLEMENT_AGENT in str(exc.value)
-
-
-def test_verifier_is_you_implement(fixture) -> None:
-    result = AgentResult(task_id=fixture.task.id)
-    with pytest.raises(NotImplementedError, match="YOU IMPLEMENT") as exc:
-        verify(fixture.task, result, fixture.labels)
-    assert YOU_IMPLEMENT_VERIFIER in str(exc.value)
-
-
-def test_metering_is_later_stub() -> None:
-    with pytest.raises(NotImplementedError, match="LATER STUB") as exc:
-        record_usage(tokens_in=1)
-    assert LATER_STUB_METERING in str(exc.value)
+def test_metering_records_measured_local_usage() -> None:
+    reset()
+    record_usage(tokens_in=0, tokens_out=0, latency_ms=12)
+    measured = summary()
+    assert measured["latency_ms"] == "12"
+    assert measured["cost_usd"] == "0.0000"
+    assert measured["tokens"] == "0"
+    reset()

@@ -11,7 +11,7 @@ license = "MIT"
 requires-python = ">=3.12"
 authors = [{ name = "Ashish Kosana", email = "ashishkosana@gmail.com" }]
 keywords = ["agent", "eval", "cli", "github-action", "code-repair", "ops"]
-dependencies = []
+dependencies = ["pytest>=8"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11"]

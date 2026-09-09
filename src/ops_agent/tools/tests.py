@@ -34,7 +34,16 @@ def run_tests(workspace: Path, *, mock: bool = True) -> ToolResult:
         )
 
     proc = subprocess.run(
-        [sys.executable, "-m", "pytest", str(root), "-q", "--tb=short"],
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            str(root),
+            "-q",
+            "--tb=short",
+            "--rootdir",
+            str(root),
+        ],
         check=False,
         capture_output=True,
         text=True,

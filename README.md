@@ -6,26 +6,37 @@
 ![Python](https://img.shields.io/badge/python-3.12+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-`ops-agent` is a **Milestone 1 scaffold**: a CLI and GitHub Action that load a
-labeled task fixture, call a **stub planner**, and print a scorecard whose
-pass rate / cost / latency stay `—` until the agent exists.
+`ops-agent` is a **Milestone 2** local repair loop: a CLI and GitHub Action
+that load a labeled fixture, plan a finite search → test → patch → re-test
+sequence, run it on a **temp copy** of the workspace, and print a scorecard
+whose pass / cost / latency come from that run.
 
-The hard parts are left for the owner on purpose:
+This is a scored toy on three labeled workspaces. It is **not** a production
+ops platform and it does not have production traffic, user counts, or
+Kafka-scale claims.
 
-| Module | Marker |
+There are **no hardcoded production metrics** in this README. When the
+scorecard prints numbers, they are computed live from `evals/fixtures/`.
+Cost is `$0.0000` on the default planner because no model is called.
+Latency is wall-clock milliseconds of that local run and will vary by machine.
+
+---
+
+## What works vs what is unfinished
+
+| Piece | Status |
 |---|---|
-| `src/ops_agent/planner.py` | `YOU IMPLEMENT` — task decomposition |
-| `src/ops_agent/agent.py` | `YOU IMPLEMENT` — planner → tools → verifier loop |
-| `src/ops_agent/verifier.py` | `YOU IMPLEMENT` — accept/reject policy |
+| Deterministic planner (`src/ops_agent/planner.py`) | Works offline. Finite plan from the task prompt. |
+| Agent loop (`src/ops_agent/agent.py`) | Works. Temp workspace, tool budget, no infinite retry. |
+| Verifier (`src/ops_agent/verifier.py`) | Works. Fail-closed: mock tests and missing evidence reject. |
+| Tools: search / read / apply_patch / run_tests | Work. Path escape rejected. Safe mocks remain the Toolbelt default. |
+| `ops-agent run` / `ops-agent eval` | Work. Eval runs every fixture and scores it. |
+| Local scorecard | Works. Pass rate + measured cost/latency, or `—` if not measured. |
+| LLM planner | Gated only. `OPS_AGENT_PLANNER=llm` requires a key and then **refuses** — this package ships no vendor client. CI stays offline. |
+| Action marketplace packaging | Still a later stub (`action.yml` branding / release tags). |
 
-Do not generate those. Ashish has to own and defend them.
-
-This repo **lifts the review-lens pattern** (multi-step agent + labeled eval
-harness) without copying that project. [review-lens](https://github.com/Ashishkosana/review-lens)
-reviews a diff. This one **acts** on a broken workspace.
-
-There are **no production metrics** in this README. When numbers appear, they
-will be computed live from `evals/fixtures/` — never hardcoded.
+The owner still has to defend the policy: what is a step, when to stop, and
+what counts as evidence. The code is the take, not a hidden generator.
 
 ---
 
@@ -35,26 +46,31 @@ will be computed live from `evals/fixtures/` — never hardcoded.
 git clone https://github.com/Ashishkosana/ops-agent && cd ops-agent
 pip install -e ".[dev]"
 ops-agent run fix_off_by_one
+ops-agent run fix_off_by_one --agent
 ops-agent eval
 ```
 
-Expected on the scaffold: the CLI loads the fixture, the planner raises
-`NotImplementedError` (`YOU IMPLEMENT`), and the scorecard prints em-dashes.
+`ops-agent run` prints the plan and a pending row (the loop is not invoked).
+`--agent` runs the loop on a temp copy. `--strict` runs the loop and exits 2
+if the verifier rejects.
+
+`ops-agent eval` runs all three fixtures. Expect a scorecard shaped like:
 
 ```
-loaded fixture: fix_off_by_one
-planner: NotImplemented — YOU IMPLEMENT: core planner — ...
-agent: skipped
-
 ops-agent scorecard
-fixture          pass  cost  latency  status
----------------  ----  ----  -------  ----------------
-fix_off_by_one   —     —     —        not_implemented
+fixture               pass  cost    latency  status
+--------------------  ----  ------  -------  ------
+broken_import         1/1   0.0000  <ms>     pass
+failing_healthcheck   1/1   0.0000  <ms>     pass
+fix_off_by_one        1/1   0.0000  <ms>     pass
 
 Honest metrics only: local fixtures/evals. No production stats.
 ```
 
-`python -m ops_agent.eval` prints the same pending table.
+`<ms>` is whatever that process measured. Do not paste a latency from this
+README into a resume as if it were a benchmark.
+
+`python -m ops_agent.eval` prints the same scored table.
 
 ---
 
@@ -67,45 +83,42 @@ Honest metrics only: local fixtures/evals. No production stats.
         CLI / Action
            │
            ▼
-     ┌─ planner ─┐          YOU IMPLEMENT
+     ┌─ planner ─┐          deterministic (LLM gated, offline CI)
      │  Plan     │
      └────┬──────┘
           ▼
-     tools (stubs that already run)
-        search_codebase   read-only walk of the fixture workspace
-        run_tests         mock by default; can pytest the workspace
-        apply_patch       dry-run unified diff, path-escape rejected
+     tools (temp copy of the workspace)
+        search_codebase   read-only walk
+        read_file         one file; path-escape rejected
+        run_tests         mock by default; real pytest when safe_mocks=False
+        apply_patch       dry-run by default; writes only on a validated diff
           │
           ▼
-     ┌─ verifier ─┐         YOU IMPLEMENT
+     ┌─ verifier ─┐         fail-closed (labels optional; gold hints unused)
      │  verdict   │
      └────┬──────┘
           ▼
      scorecard              pass rate · cost · latency
-                            (— until implemented; then local fixtures only)
+                            (local fixtures only)
 ```
 
-**Ports, not a monolith.** The agent loop will depend on a `Toolbelt`, not on
-pytest or the filesystem directly. CI tests the wiring against safe mocks —
-no network, no secrets, no writes outside a fixture workspace.
+**Ports, not a monolith.** The loop depends on a `Toolbelt`, not on pytest or
+the filesystem directly. Unit tests can inject `safe_mocks=True`. Eval uses
+real pytest + writes inside a temp directory — no network, no secrets, no
+writes back into `evals/fixtures/`.
 
 ```
 src/ops_agent/
-  cli.py           # load fixture → stub planner → pending scorecard
-  planner.py       # YOU IMPLEMENT
-  agent.py         # YOU IMPLEMENT
-  verifier.py      # YOU IMPLEMENT
+  cli.py           # load fixture → plan → optional agent → scorecard
+  planner.py       # deterministic decomposition (LLM path gated)
+  agent.py         # planner → tools → verifier
+  verifier.py      # accept / reject from evidence
+  repair.py        # hypothesize a unified diff from test output
   models.py        # Task, Plan, AgentResult, Scorecard (pure)
-  tools/           # search / pytest / dry-run patch + later metering stub
+  tools/           # search / read / pytest / patch + local metering
   eval/            # fixture loader + scorecard printer
 evals/fixtures/    # 3 labeled workspaces (see evals/README.md)
 ```
-
-### Later stubs (not Milestone 1)
-
-- Real patch application (`apply_patch(..., dry_run=False)`)
-- Cost / latency metering (`tools/metering.py`)
-- Action marketplace packaging (`action.yml` branding / release tags)
 
 ---
 
@@ -116,7 +129,7 @@ Same *discipline*, different *job*.
 | | [review-lens](https://github.com/Ashishkosana/review-lens) | ops-agent |
 |---|---|---|
 | Input | a git diff | a broken workspace + a prompt |
-| Motion | read → comment | search → test → patch → re-test |
+| Motion | read → comment | search → read → test → patch → re-test |
 | Verify | adversarially refute *findings* | policy over a *run* (tests, files, evidence) |
 | Score | precision / recall / F1 on labeled diffs | pass rate, cost, latency on labeled tasks |
 | Risk | noisy review comments | unbounded tool use, escaped patches, fake greens |
@@ -131,30 +144,30 @@ be fail-closed about evidence, not vibes.
 
 ## Interview talking points
 
-1. **I left the core blank on purpose.** A generated planner is not a take.
-   The interesting design is: what is a step, when do you stop, what is
-   enough evidence to pass.
-2. **Same eval habit as review-lens.** Labeled fixtures, a printer that
-   refuses to invent numbers, CI that stays green on the scaffold without
-   lying that the agent works.
-3. **Tools are a trust boundary.** Search is read-only. Tests default to a
-   mock so CI does not shell out. Patches are dry-run and cannot `../`
-   out of the workspace. Real writes are a later stub, not a silent default.
-4. **Ops is in the fixtures, not just LeetCode.** `failing_healthcheck` is a
-   wrong probe path. The loop should look the same for a bug-fix and a
-   runbook-shaped repair.
-5. **Scorecard is a product, not a screenshot.** Pass rate without cost and
-   latency is how agents look cheap until the bill arrives. All three stay
-   `—` until they are measured.
+1. **Finite plan, not an open loop.** Search what the prompt names, run tests
+   for evidence, apply one hypothesized patch, re-test. If it is still red,
+   we stop. A tool-call budget is the backstop.
+2. **Same eval habit as review-lens.** Labeled fixtures. The printer refuses
+   to invent production numbers. Cost is $0.0000 here because no model ran;
+   latency is measured wall-clock.
+3. **Tools are a trust boundary.** Search and read are contained. Tests
+   default to a mock so unit tests do not shell out. Patches cannot `../`
+   out of the workspace. Real writes happen on a temp copy.
+4. **Gold hints are not a cheat code.** `labels.json` is for the harness.
+   The planner, repairer, and agent do not read `gold_hint`. The verifier
+   may use expected files in eval mode; it never treats a hint as evidence.
+5. **Ops is in the fixtures, not just LeetCode.** `failing_healthcheck` is a
+   wrong probe path. The loop is the same for a bug-fix and a runbook-shaped
+   repair. That is still three tiny repos — not a production ops story.
 
 ---
 
 ## CLI
 
 ```bash
-ops-agent run fix_off_by_one           # load + stub planner (exit 0)
-ops-agent run fix_off_by_one --agent   # also call the stub loop (exit 0)
-ops-agent run fix_off_by_one --strict  # exit 2 while unimplemented
+ops-agent run fix_off_by_one           # load + plan (exit 0)
+ops-agent run fix_off_by_one --agent   # run the loop on a temp copy
+ops-agent run fix_off_by_one --strict  # run the loop; exit 2 if rejected
 ops-agent eval                         # scorecard over all fixtures
 ops-agent eval --format json
 ```
@@ -164,22 +177,20 @@ ops-agent eval --format json
 ## GitHub Action
 
 Composite Action in `action.yml`. Workflow CI (`.github/workflows/ci.yml`)
-installs the package, runs ruff / mypy / pytest, then `ops-agent run` +
-`ops-agent eval` on a fixture.
+installs the package, runs ruff / mypy / pytest, then `ops-agent run --agent`
+and `ops-agent eval` on the labeled fixtures.
 
-The Action **skips the unimplemented agent by default** (`skip-agent: true`)
-so a green check means "scaffold works", not "the agent solved the task."
-That distinction is the whole point.
+`skip-agent` defaults to `false` now that the loop exists. Set it `true` if
+you only want the planner + pending row.
 
 ```yaml
-# after you implement the loop, pin a tag and drop skip-agent
 - uses: Ashishkosana/ops-agent@main
   with:
     fixture: fix_off_by_one
-    skip-agent: true
+    skip-agent: false
 ```
 
-Marketplace packaging is a later stub.
+Marketplace packaging is still a later stub.
 
 ---
 

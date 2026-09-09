@@ -24,7 +24,7 @@ def test_load_fixture_by_id() -> None:
     assert (fixture.task.workspace / "helpers.py").is_file()
 
 
-def test_scorecard_pending_until_agent_implemented() -> None:
+def test_scorecard_pending_without_results() -> None:
     fixtures = load_fixtures()
     card = build_scorecard(fixtures)
     assert len(card.rows) == 3
@@ -56,13 +56,28 @@ def test_score_result_uses_labels_only_when_implemented() -> None:
     )
     assert done.status is RunStatus.PASS
     assert done.pass_rate == "1/1"
-    # Cost/latency stay pending until metering exists — do not fabricate them.
+    # Hand-built result has no measured cost/latency — do not fabricate them.
     assert done.cost_usd == PENDING
     assert done.latency_ms == PENDING
+
+    measured = score_result(
+        fixture,
+        AgentResult(
+            task_id=fixture.task.id,
+            implemented=True,
+            files_changed=("ranges.py",),
+            tests_passed=True,
+            cost_usd=0.0,
+            latency_ms=15,
+        ),
+    )
+    assert measured.cost_usd == "0.0000"
+    assert measured.latency_ms == "15"
 
 
 def test_eval_module_main(capsys) -> None:
     assert eval_main() == 0
     out = capsys.readouterr().out
     assert "fix_off_by_one" in out
-    assert "—" in out
+    assert "1/1" in out
+    assert "pass" in out

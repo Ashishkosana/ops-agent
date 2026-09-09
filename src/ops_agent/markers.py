@@ -13,5 +13,6 @@ YOU_IMPLEMENT_VERIFIER = (
 LATER_STUB_PATCH = "LATER STUB: real patch application (write files inside the workspace)."
 LATER_STUB_METERING = "LATER STUB: cost/latency metering from real tool/LLM usage."
 LATER_STUB_MARKETPLACE = "LATER STUB: GitHub Action marketplace packaging."
+# Patch writes and local metering shipped in Milestone 2. Marketplace has not.
 
 PENDING = "—"
