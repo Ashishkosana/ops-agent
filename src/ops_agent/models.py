@@ -10,6 +10,7 @@ from typing import Any
 
 class ToolName(StrEnum):
     SEARCH_CODEBASE = "search_codebase"
+    READ_FILE = "read_file"
     RUN_TESTS = "run_tests"
     APPLY_PATCH = "apply_patch"
 
@@ -67,6 +68,9 @@ class AgentResult:
     files_changed: tuple[str, ...] = ()
     tests_passed: bool | None = None
     notes: str = ""
+    latency_ms: int | None = None
+    cost_usd: float | None = None
+    verification: Verification | None = None
 
 
 @dataclass(frozen=True)
@@ -96,5 +100,5 @@ class Scorecard:
     rows: tuple[ScorecardRow, ...]
     disclaimer: str = (
         "Honest metrics only: local fixtures/evals. No production stats. "
-        "Em-dashes mean the agent has not been implemented yet."
+        "Em-dashes mean that metric was not measured on this run."
     )

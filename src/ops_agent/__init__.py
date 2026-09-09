@@ -1,8 +1,8 @@
 """ops-agent: planner → tools → verifier → scorecard.
 
 Public surface is small on purpose. The CLI (`ops_agent.cli`) is the entry
-point. The planner, agent loop, and verifier policy are intentionally stubs —
-see `YOU IMPLEMENT` markers in `planner.py`, `agent.py`, and `verifier.py`.
+point. Milestone 2 ships a deterministic planner, tool loop, and fail-closed
+verifier. Metrics come from local fixtures only.
 """
 
 from ops_agent.models import AgentResult, Scorecard, Task, Verification

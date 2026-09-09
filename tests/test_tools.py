@@ -3,9 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from ops_agent.eval.fixtures import load_fixture
-from ops_agent.markers import LATER_STUB_PATCH
 from ops_agent.models import ToolName
-from ops_agent.tools import Toolbelt, apply_patch, run_tests, search_codebase
+from ops_agent.tools import Toolbelt, apply_patch, read_file, run_tests, search_codebase
 from ops_agent.tools._paths import resolve_inside
 from ops_agent.tools.patch import apply_patch_for_real
 
@@ -75,10 +74,41 @@ def test_apply_patch_rejects_non_diff(tmp_path: Path) -> None:
     assert "unified diff" in result.output
 
 
-def test_apply_patch_for_real_is_later_stub(tmp_path: Path) -> None:
-    result = apply_patch_for_real(tmp_path, "--- a/x\n+++ b/x\n")
-    assert result.ok is False
-    assert LATER_STUB_PATCH in result.output
+def test_apply_patch_writes_inside_workspace(tmp_path: Path) -> None:
+    (tmp_path / "ranges.py").write_text("x = 1\n", encoding="utf-8")
+    diff = """\
+--- a/ranges.py
++++ b/ranges.py
+@@ -1 +1 @@
+-x = 1
++x = 2
+"""
+    result = apply_patch(tmp_path, diff, dry_run=False)
+    assert result.ok
+    assert result.metadata["wrote"] is True
+    assert (tmp_path / "ranges.py").read_text(encoding="utf-8") == "x = 2\n"
+    real = apply_patch_for_real(
+        tmp_path,
+        """\
+--- a/ranges.py
++++ b/ranges.py
+@@ -1 +1 @@
+-x = 2
++x = 3
+""",
+    )
+    assert real.ok
+    assert (tmp_path / "ranges.py").read_text(encoding="utf-8") == "x = 3\n"
+
+
+def test_read_file_and_reject_escape(tmp_path: Path) -> None:
+    (tmp_path / "notes.txt").write_text("hello\n", encoding="utf-8")
+    ok = read_file(tmp_path, "notes.txt")
+    assert ok.ok
+    assert "hello" in ok.output
+    denied = read_file(tmp_path, "../secret")
+    assert denied.ok is False
+    assert "escapes workspace" in denied.output
 
 
 def test_resolve_inside_blocks_escape(tmp_path: Path) -> None:
@@ -101,3 +131,6 @@ def test_toolbelt_safe_defaults() -> None:
     patch = belt.apply_patch("--- a/healthcheck.py\n+++ b/healthcheck.py\n")
     assert patch.ok
     assert patch.metadata["wrote"] is False
+    opened = belt.read_file("healthcheck.py")
+    assert opened.ok
+    assert "ENDPOINT" in opened.output

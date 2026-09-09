@@ -1,8 +1,8 @@
-"""Scorecard: pass rate, cost, latency — pending until the agent exists.
+"""Scorecard: pass rate, cost, latency from local fixture runs.
 
 Numbers here come only from local fixtures. Until `AgentResult.implemented`
-is true, every metric is the literal em-dash. We never print 0.00 or a
-made-up production figure.
+is true, every metric is the literal em-dash. Measured cost/latency come
+from the run itself — never from a hardcoded production figure.
 """
 
 from __future__ import annotations
@@ -12,17 +12,15 @@ from collections.abc import Mapping, Sequence
 from ops_agent.eval.fixtures import Fixture
 from ops_agent.markers import PENDING
 from ops_agent.models import AgentResult, RunStatus, Scorecard, ScorecardRow
-from ops_agent.tools.metering import summary as metering_summary
 
 
 def _pending_row(task_id: str, notes: str) -> ScorecardRow:
-    meter = metering_summary()
     return ScorecardRow(
         task_id=task_id,
         status=RunStatus.NOT_IMPLEMENTED,
         pass_rate=PENDING,
-        cost_usd=meter["cost_usd"],
-        latency_ms=meter["latency_ms"],
+        cost_usd=PENDING,
+        latency_ms=PENDING,
         notes=notes,
     )
 
@@ -35,19 +33,20 @@ def score_result(fixture: Fixture, result: AgentResult | None) -> ScorecardRow:
             "agent not implemented — metrics withheld",
         )
 
-    # Local-fixture scoring only. Cost/latency stay pending until metering exists.
-    meter = metering_summary()
+    # Local-fixture scoring only. Cost/latency come from this result or stay pending.
     tests_ok = result.tests_passed is True and fixture.labels.tests_should_pass
     expected = set(fixture.labels.expected_files_changed)
     changed = set(result.files_changed)
     files_ok = bool(expected) and expected <= changed
     passed = tests_ok and files_ok
+    cost_usd = f"{result.cost_usd:.4f}" if result.cost_usd is not None else PENDING
+    latency_ms = str(result.latency_ms) if result.latency_ms is not None else PENDING
     return ScorecardRow(
         task_id=fixture.task.id,
         status=RunStatus.PASS if passed else RunStatus.FAIL,
         pass_rate="1/1" if passed else "0/1",
-        cost_usd=meter["cost_usd"],
-        latency_ms=meter["latency_ms"],
+        cost_usd=cost_usd,
+        latency_ms=latency_ms,
         notes="scored from local fixture labels only",
     )
 

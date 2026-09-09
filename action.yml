@@ -1,5 +1,5 @@
 name: "ops-agent"
-description: "Run ops-agent on a labeled task fixture (scaffold). Agent loop is YOU IMPLEMENT."
+description: "Run ops-agent on a labeled task fixture (deterministic local loop)."
 branding:
   icon: "terminal"
   color: "blue"
@@ -13,9 +13,9 @@ inputs:
     required: false
     default: "fix_off_by_one"
   skip-agent:
-    description: "Skip the unimplemented agent loop so CI stays green (default true)."
+    description: "Skip the agent loop and only print a plan + pending row."
     required: false
-    default: "true"
+    default: "false"
 
 runs:
   using: "composite"
@@ -33,11 +33,8 @@ runs:
         SKIP_AGENT: ${{ inputs.skip-agent }}
       run: |
         set -euo pipefail
-        # The planner/agent are YOU IMPLEMENT. Default path exits 0 with a
-        # pending scorecard. Pass skip-agent=false to invoke the stub loop
-        # (still exits 0 unless you add --strict after implementation).
         extra=()
-        if [ "$SKIP_AGENT" = "false" ]; then
+        if [ "$SKIP_AGENT" != "true" ]; then
           extra+=(--agent)
         fi
         ops-agent run "$FIXTURE" "${extra[@]}"

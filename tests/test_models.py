@@ -21,6 +21,7 @@ def test_agent_result_defaults_unimplemented() -> None:
 
 def test_tool_name_values() -> None:
     assert ToolName.SEARCH_CODEBASE == "search_codebase"
+    assert ToolName.READ_FILE == "read_file"
     assert ToolName.RUN_TESTS == "run_tests"
     assert ToolName.APPLY_PATCH == "apply_patch"
 

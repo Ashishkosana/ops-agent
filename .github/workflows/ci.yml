@@ -24,10 +24,9 @@ jobs:
         run: mypy
       - name: Tests (pytest)
         run: pytest -q
-      - name: CLI fixture smoke (agent not implemented — expected)
+      - name: CLI fixture smoke (real local loop)
         run: |
-          # Scaffold contract: `ops-agent run` loads a fixture, calls the stub
-          # planner, prints a pending scorecard (em-dashes), and exits 0.
-          # Do not use --strict here; that gate is for after YOU IMPLEMENT.
-          ops-agent run fix_off_by_one
+          # Milestone 2: run the deterministic loop on one fixture, then
+          # score every local fixture. No API key. Numbers come from this job.
+          ops-agent run fix_off_by_one --agent
           ops-agent eval
